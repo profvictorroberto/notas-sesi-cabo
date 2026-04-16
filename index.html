@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diário de Classe Digital - SESI</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; }
+        h2, h3 { color: #333; text-align: center; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 20px; }
+        .section { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #dee2e6; }
+        .row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; flex: 1; box-sizing: border-box; }
+        button { padding: 10px 15px; background-color: #0056b3; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background-color: #004494; }
+        .btn-success { background-color: #28a745; width: 100%; font-size: 16px; padding: 12px; margin-top: 10px; }
+        .btn-success:hover { background-color: #218838; }
+        .btn-add { background-color: #6c757d; }
+        .btn-danger { background-color: #dc3545; padding: 5px 10px; font-size: 14px;}
+        .btn-danger:hover { background-color: #c82333; }
+        .btn-pdf { background-color: #ff9800; color: #fff; width: 100%; font-size: 16px; padding: 12px; margin-top: 10px; }
+        .btn-pdf:hover { background-color: #e68a00; }
+        .hidden { display: none !important; }
+        
+        .tabs-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; background: #e9ecef; padding: 10px; border-radius: 8px; }
+        .tab-button { background-color: #ccc; color: #333; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .tab-button.active { background-color: #0056b3; color: white; }
+        .tab-button:hover:not(.active) { background-color: #bbb; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th, td { border: 1px solid #dee2e6; padding: 10px; text-align: center; }
+        th { background-color: #e9ecef; color: #333; }
+        td input { width: 70px; text-align: center; border: 1px solid #aaa; font-weight: bold; }
+        .nome-aluno { width: 250px; text-align: left; }
+        .status-badge { padding: 5px 10px; border-radius: 20px; font-weight: bold; font-size: 13px; }
+        .approved { background-color: #d4edda; color: #155724; }
+        .reproved { background-color: #f8d7da; color: #721c24; }
+        .warning { color: #856404; background-color: #fff3cd; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 15px; font-weight: bold; }
+        .info-msg { text-align: center; color: #666; font-style: italic; padding: 20px; }
+        .btn-icon { background-color: transparent; border: none; cursor: pointer; font-size: 18px; padding: 0; color: #dc3545; }
+        .btn-icon:hover { color: #a71d2a; background-color: transparent; }
+
+        /* Estilos do Boletim Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: #fff; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .close-btn { position: absolute; top: 15px; right: 15px; background: #dc3545; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-weight: bold; padding: 0; display: flex; justify-content: center; align-items: center; transition: 0.3s;}
+        .close-btn:hover { background: #c82333; }
+        
+        /* Estilos globais para a tabela do boletim (usado no modal e no PDF) */
+        .boletim-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .boletim-table th, .boletim-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        .boletim-table th { background: #0056b3; color: white; text-align: center; }
+        .boletim-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0056b3; padding-bottom: 10px; }
+
+        .modo-impressao .esconder-no-pdf { display: none !important; }
+        .modo-impressao { padding: 0; background: white; }
+        .modo-impressao .container { box-shadow: none; max-width: none; padding: 0; }
+        .modo-impressao td input { border: none; background: transparent; font-weight: bold; font-size: 14px; padding: 0; width: 100%; }
+        .modo-impressao .section { border: none; padding: 0; margin-bottom: 10px; }
+        .modo-impressao .area-cabecalho { margin-bottom: 30px; }
+
+        #statusNuvem { font-size: 14px; font-weight: bold; padding: 5px 10px; border-radius: 20px; margin-left: 15px; transition: 0.3s; }
+        .status-salvo { color: #155724; background-color: #d4edda; }
+        .status-salvando { color: #856404; background-color: #fff3cd; }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="conteudoPrincipal">
+        <h2 class="esconder-no-pdf">Painel do Professor</h2>
+        <div class="subtitle esconder-no-pdf">Gerencie turmas, áreas do conhecimento e notas independentes</div>
+
+        <div class="row esconder-no-pdf" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
+            <input type="text" id="inputNovaTurma" placeholder="Nome da nova turma (Ex: 1º Ano A)">
+            <button class="btn-success" style="width: auto; margin: 0;" onclick="criarTurma()">+ Criar Turma</button>
+        </div>
+
+        <div id="listaAbasTurmas" class="tabs-container hidden esconder-no-pdf"></div>
+
+        <div id="mensagemInicial" class="info-msg">
+            Carregando seus dados do banco... Aguarde um momento.
+        </div>
+
+        <div id="areaTurma" class="hidden">
+            
+            <div class="area-cabecalho" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center;">
+                    <h3 style="color: #0056b3; font-size: 24px; margin: 0;">
+                        Turma: <span id="tituloTurmaAtiva"></span> 
+                        <span id="tituloAreaAtiva" style="color: #666; font-size: 20px;"></span>
+                    </h3>
+                    <span id="statusNuvem" class="status-salvo esconder-no-pdf">☁️ Salvo</span>
+                </div>
+                <button class="btn-danger esconder-no-pdf" onclick="excluirTurmaAtual()">🗑️ Excluir Turma do Banco</button>
+            </div>
+
+            <div class="row esconder-no-pdf" style="background: #e9ecef; padding: 10px 15px; border-radius: 5px; margin-bottom: 20px;">
+                <label for="seletorArea" style="font-weight: bold; font-size: 16px; margin-right: 10px; color: #333;">Área da Disciplina:</label>
+                <select id="seletorArea" onchange="mudarArea()" style="font-weight: bold; font-size: 16px; color: #0056b3;">
+                    <option value="Ciências Humanas">Ciências Humanas</option>
+                    <option value="Ciências da Natureza">Ciências da Natureza</option>
+                    <option value="Matemática">Matemática</option>
+                    <option value="Linguagens">Linguagens</option>
+                    <option value="Robótica">Robótica</option>
+                    <option value="Aprofundamento">Aprofundamento</option>
+                    <option value="Projeto de Vida">Projeto de Vida</option>
+                </select>
+            </div>
+
+            <div class="section esconder-no-pdf">
+                <h3>1. Composição da Nota da Área (Total: 100%)</h3>
+                <div id="alertaPesos" class="warning hidden">A soma das atividades precisa ser exatamente 100%.</div>
+                <div id="listaAtividades"></div> 
+                <div class="row" style="margin-top: 15px; background: #fff; padding: 15px; border-radius: 5px; border: 1px dashed #ccc;">
+                    <input type="text" id="novaAtivNome" placeholder="Nova Atividade (Ex: Prova Escrita)">
+                    <input type="number" id="novaAtivPeso" placeholder="Peso %" style="flex: 0.3;">
+                    <button class="btn-add" onclick="adicionarAtividade()">+ Adicionar Atividade</button>
+                </div>
+                <div style="text-align: right; font-weight: bold; margin-top: 10px; font-size: 18px;">
+                    Total Distribuído: <span id="somaTotalPesos">0</span>%
+                </div>
+            </div>
+
+            <div class="section" id="areaDiarioPDF">
+                <h3>Diário de Notas</h3>
+                <div class="row esconder-no-pdf" id="linhaNovoAluno" style="margin-bottom: 20px;">
+                    <input type="text" id="novoAlunoNome" placeholder="Nome do Aluno">
+                    <button class="btn-add" onclick="adicionarAluno()">+ Adicionar Aluno na Turma</button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table id="tabelaDiario">
+                        <thead><tr id="cabecalhoTabela"></tr></thead>
+                        <tbody id="corpoTabela"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="esconder-no-pdf">
+                <button class="btn-pdf" onclick="gerarPDFDiario()">📄 Gerar PDF do Diário desta Disciplina</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalBoletim" class="modal-overlay hidden">
+        <div class="modal-content">
+            <button class="close-btn" title="Fechar" onclick="fecharBoletim()">X</button>
+            <div id="areaImpressaoBoletim">
+                </div>
+            <button class="btn-pdf" id="btnBaixarBoletim" onclick="gerarPDFBoletim()" style="margin-top: 20px; background-color: #28a745;">📄 Baixar Boletim em PDF</button>
+        </div>
+    </div>
+
+    <div id="containerBoletimPDF" class="hidden" style="background: white; padding: 40px; color: black; max-width: 800px; margin: 0 auto;"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBMsQ9HQROY6Zfn82PGeEQlk6e6bk3DnjI",
+            authDomain: "sistemanotassesi.firebaseapp.com",
+            projectId: "sistemanotassesi",
+            storageBucket: "sistemanotassesi.firebasestorage.app",
+            messagingSenderId: "863158159626",
+            appId: "1:863158159626:web:eb6d856ab9ede8e73c92f3",
+            measurementId: "G-VWDBSNG5F1"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let turmas = []; 
+        let indiceTurmaAtiva = -1;
+        let areaAtiva = "Ciências Humanas"; 
+        let timerAutoSave = null;
+        let alunoAtualBoletim = "";
+
+        const LISTA_AREAS = ["Ciências Humanas", "Ciências da Natureza", "Matemática", "Linguagens", "Robótica", "Aprofundamento", "Projeto de Vida"];
+
+        function acionarAutoSave() {
+            const statusVisual = document.getElementById('statusNuvem');
+            statusVisual.innerText = "⏳ Salvando...";
+            statusVisual.className = "status-salvando esconder-no-pdf";
+
+            clearTimeout(timerAutoSave);
+            
+            timerAutoSave = setTimeout(async () => {
+                if(indiceTurmaAtiva === -1) return;
+                const turma = turmas[indiceTurmaAtiva];
+                
+                try {
+                    const dadosTurma = {
+                        turma: turma.nome,
+                        alunos: turma.alunos,
+                        areas: turma.areas,
+                        dataUltimaAtualizacao: new Date().toLocaleString('pt-BR')
+                    };
+                    
+                    const idParaSalvar = turma.firebaseId || turma.nome;
+                    await setDoc(doc(db, "diarios_turmas", idParaSalvar), dadosTurma);
+                    turma.firebaseId = idParaSalvar; 
+                    
+                    statusVisual.innerText = "☁️ Salvo";
+                    statusVisual.className = "status-salvo esconder-no-pdf";
+                } catch (error) {
+                    statusVisual.innerText = "❌ Erro ao Salvar";
+                    statusVisual.className = "status-salvando esconder-no-pdf";
+                    console.error("Erro no Auto-Save:", error);
+                }
+            }, 1000);
+        }
+
+        async function carregarDadosDoBanco() {
+            try {
+                const querySnapshot = await getDocs(collection(db, "diarios_turmas"));
+                turmas = []; 
+                querySnapshot.forEach((documento) => {
+                    const dados = documento.data();
+                    
+                    let areasDoBanco = dados.areas;
+                    if (!areasDoBanco) {
+                        areasDoBanco = {};
+                        LISTA_AREAS.forEach(a => areasDoBanco[a] = { atividades: [], notas: {} });
+                        
+                        if (dados.atividadesDefinidas) {
+                            areasDoBanco["Ciências Humanas"].atividades = dados.atividadesDefinidas;
+                            if (dados.alunos) {
+                                dados.alunos.forEach(al => {
+                                    areasDoBanco["Ciências Humanas"].notas[al.id || Date.now().toString()] = al.notas || {};
+                                });
+                            }
+                        }
+                    }
+
+                    let alunosTratados = (dados.alunos || []).map(al => {
+                        return { id: al.id ? al.id.toString() : Date.now().toString() + Math.random().toString().substr(2,5), nome: al.nome };
+                    });
+
+                    turmas.push({
+                        firebaseId: documento.id,
+                        id: Date.now() + Math.random(),
+                        nome: dados.turma,
+                        alunos: alunosTratados,
+                        areas: areasDoBanco
+                    });
+                });
+
+                const msgInicial = document.getElementById('mensagemInicial');
+                if (turmas.length > 0) {
+                    msgInicial.classList.add('hidden');
+                    document.getElementById('listaAbasTurmas').classList.remove('hidden');
+                    renderizarAbas();
+                    selecionarTurma(0); 
+                } else {
+                    msgInicial.innerText = "Nenhuma turma salva encontrada. Crie uma turma acima para começar.";
+                }
+            } catch (error) {
+                document.getElementById('mensagemInicial').innerText = "Erro ao conectar com o banco de dados.";
+            }
+        }
+
+        carregarDadosDoBanco();
+
+        window.mudarArea = () => {
+            areaAtiva = document.getElementById('seletorArea').value;
+            document.getElementById('tituloAreaAtiva').innerText = " - " + areaAtiva;
+            renderizarAtividades();
+            renderizarDiario();
+        };
+
+        window.criarTurma = () => {
+            const nomeInput = document.getElementById('inputNovaTurma');
+            const nome = nomeInput.value.trim();
+
+            if (!nome) { alert("Digite um nome para a turma."); return; }
+            const turmaExiste = turmas.find(t => t.nome.toLowerCase() === nome.toLowerCase());
+            if (turmaExiste) { alert("Já existe uma turma com este nome."); return; }
+
+            let objAreas = {};
+            LISTA_AREAS.forEach(a => objAreas[a] = { atividades: [], notas: {} });
+
+            turmas.push({ 
+                id: Date.now().toString(), 
+                nome: nome, 
+                alunos: [], 
+                areas: objAreas 
+            });
+            
+            nomeInput.value = '';
+            selecionarTurma(turmas.length - 1);
+            acionarAutoSave(); 
+        };
+
+        window.selecionarTurma = (index) => {
+            indiceTurmaAtiva = index;
+            document.getElementById('mensagemInicial').classList.add('hidden');
+            document.getElementById('listaAbasTurmas').classList.remove('hidden');
+            document.getElementById('areaTurma').classList.remove('hidden');
+            
+            document.getElementById('tituloTurmaAtiva').innerText = turmas[indiceTurmaAtiva].nome;
+            
+            document.getElementById('seletorArea').value = areaAtiva;
+            document.getElementById('tituloAreaAtiva').innerText = " - " + areaAtiva;
+            
+            document.getElementById('statusNuvem').innerText = "☁️ Salvo";
+            document.getElementById('statusNuvem').className = "status-salvo esconder-no-pdf";
+
+            renderizarAbas();
+            renderizarAtividades();
+            renderizarDiario();
+        };
+
+        window.excluirTurmaAtual = async () => {
+            const turmaSelecionada = turmas[indiceTurmaAtiva];
+            if(confirm(`Tem certeza que deseja excluir a turma '${turmaSelecionada.nome}' permanentemente do Banco de Dados?`)) {
+                try {
+                    const idParaDeletar = turmaSelecionada.firebaseId || turmaSelecionada.nome;
+                    await deleteDoc(doc(db, "diarios_turmas", idParaDeletar));
+                    
+                    turmas.splice(indiceTurmaAtiva, 1);
+                    if (turmas.length > 0) {
+                        selecionarTurma(0);
+                    } else {
+                        indiceTurmaAtiva = -1;
+                        document.getElementById('areaTurma').classList.add('hidden');
+                        document.getElementById('listaAbasTurmas').classList.add('hidden');
+                        document.getElementById('mensagemInicial').innerText = "Nenhuma turma salva encontrada. Crie uma turma acima para começar.";
+                        document.getElementById('mensagemInicial').classList.remove('hidden');
+                    }
+                    renderizarAbas();
+                } catch(error) {
+                    alert("Erro ao tentar excluir a turma no banco: " + error.message);
+                }
+            }
+        };
+
+        function renderizarAbas() {
+            const container = document.getElementById('listaAbasTurmas');
+            container.innerHTML = '';
+            turmas.forEach((turma, index) => {
+                const isActive = index === indiceTurmaAtiva ? 'active' : '';
+                container.innerHTML += `<button class="tab-button ${isActive}" onclick="selecionarTurma(${index})">${turma.nome}</button>`;
+            });
+        }
+
+        window.adicionarAtividade = () => {
+            const nome = document.getElementById('novaAtivNome').value;
+            const peso = parseFloat(document.getElementById('novaAtivPeso').value);
+            if (!nome || !peso || peso <= 0) { alert("Preencha o nome da atividade e um peso válido."); return; }
+
+            const area = turmas[indiceTurmaAtiva].areas[areaAtiva];
+            area.atividades.push({ id: Date.now().toString(), nome: nome, peso: peso });
+            
+            document.getElementById('novaAtivNome').value = '';
+            document.getElementById('novaAtivPeso').value = '';
+            
+            renderizarAtividades();
+            renderizarDiario();
+            acionarAutoSave(); 
+        };
+
+        window.removerAtividade = (idAtiv) => {
+            const area = turmas[indiceTurmaAtiva].areas[areaAtiva];
+            area.atividades = area.atividades.filter(a => a.id !== idAtiv);
+            renderizarAtividades();
+            renderizarDiario();
+            acionarAutoSave(); 
+        };
+
+        function renderizarAtividades() {
+            const area = turmas[indiceTurmaAtiva].areas[areaAtiva];
+            const divLista = document.getElementById('listaAtividades');
+            divLista.innerHTML = '';
+            let soma = 0;
+
+            if (area.atividades.length === 0) divLista.innerHTML = `<p style="color:#666; font-size:14px;">Nenhuma atividade cadastrada em <strong>${areaAtiva}</strong>.</p>`;
+
+            area.atividades.forEach(ativ => {
+                soma += ativ.peso;
+                divLista.innerHTML += `
+                    <div class="row" style="background: #fff; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <span style="flex: 1;"><strong>${ativ.nome}</strong> (Peso: ${ativ.peso}%)</span>
+                        <button class="btn-danger" style="width: auto; margin:0;" onclick="removerAtividade('${ativ.id}')">Excluir</button>
+                    </div>`;
+            });
+
+            document.getElementById('somaTotalPesos').innerText = soma;
+            const alerta = document.getElementById('alertaPesos');
+            if (soma !== 100 && area.atividades.length > 0) alerta.classList.remove('hidden');
+            else alerta.classList.add('hidden');
+        }
+
+        window.adicionarAluno = () => {
+            const nomeAluno = document.getElementById('novoAlunoNome').value;
+            if (!nomeAluno) return;
+            const turma = turmas[indiceTurmaAtiva];
+            
+            turma.alunos.push({ id: Date.now().toString(), nome: nomeAluno });
+            
+            document.getElementById('novoAlunoNome').value = '';
+            renderizarDiario();
+            acionarAutoSave(); 
+        };
+
+        window.excluirAluno = (indexAluno) => {
+            const turma = turmas[indiceTurmaAtiva];
+            const alunoId = turma.alunos[indexAluno].id;
+            
+            if(confirm(`Remover o aluno(a) ${turma.alunos[indexAluno].nome} desta turma? Ele será apagado de TODAS as disciplinas.`)) {
+                turma.alunos.splice(indexAluno, 1);
+                
+                Object.values(turma.areas).forEach(area => {
+                    if(area.notas[alunoId]) delete area.notas[alunoId];
+                });
+                
+                renderizarDiario();
+                acionarAutoSave(); 
+            }
+        };
+
+        function renderizarDiario() {
+            const turma = turmas[indiceTurmaAtiva];
+            const area = turma.areas[areaAtiva];
+            const trCabecalho = document.getElementById('cabecalhoTabela');
+            const tbody = document.getElementById('corpoTabela');
+            
+            trCabecalho.innerHTML = '<th class="nome-aluno">Nome do Aluno</th>';
+            area.atividades.forEach(ativ => { trCabecalho.innerHTML += `<th>${ativ.nome}<br><small>(${ativ.peso}%)</small></th>`; });
+            trCabecalho.innerHTML += '<th>Média Final</th><th>Situação</th><th class="esconder-no-pdf">Ações</th>';
+
+            tbody.innerHTML = '';
+            if (turma.alunos.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${area.atividades.length + 4}" style="padding:20px; color:#666;">Nenhum aluno na turma.</td></tr>`;
+                return;
+            }
+
+            turma.alunos.forEach((aluno, indexAluno) => {
+                let linha = `<tr><td class="nome-aluno">${aluno.nome}</td>`;
+                
+                area.atividades.forEach(ativ => {
+                    let notaValue = (area.notas[aluno.id] && area.notas[aluno.id][ativ.id]) !== undefined ? area.notas[aluno.id][ativ.id] : '';
+                    linha += `<td><input type="number" min="0" max="10" step="0.1" value="${notaValue}" oninput="atualizarNota('${aluno.id}', '${ativ.id}', this, ${indexAluno})"></td>`;
+                });
+                
+                linha += `
+                    <td id="media_${indexAluno}" style="font-weight: bold; font-size: 16px;">0.0%</td>
+                    <td id="status_${indexAluno}">-</td>
+                    <td class="esconder-no-pdf">
+                        <button class="btn-icon" title="Ver Boletim" onclick="abrirBoletim('${aluno.id}')" style="color: #17a2b8; margin-right: 15px;">📊</button>
+                        <button class="btn-icon" title="Excluir Aluno" onclick="excluirAluno(${indexAluno})">🗑️</button>
+                    </td>
+                </tr>`;
+                
+                tbody.innerHTML += linha;
+                recalcularLinhaAluno(indexAluno, aluno.id); 
+            });
+        }
+
+        window.atualizarNota = (alunoId, idAtividade, elementoInput, indexAluno) => {
+            const area = turmas[indiceTurmaAtiva].areas[areaAtiva];
+            
+            if(!area.notas[alunoId]) {
+                area.notas[alunoId] = {};
+            }
+            
+            area.notas[alunoId][idAtividade] = elementoInput.value;
+            elementoInput.setAttribute('value', elementoInput.value);
+            
+            recalcularLinhaAluno(indexAluno, alunoId);
+            acionarAutoSave(); 
+        };
+
+        function recalcularLinhaAluno(indexAluno, alunoId) {
+            const area = turmas[indiceTurmaAtiva].areas[areaAtiva];
+            let totalPorcentagem = 0;
+
+            area.atividades.forEach(ativ => {
+                let nota = area.notas[alunoId] && area.notas[alunoId][ativ.id] ? parseFloat(area.notas[alunoId][ativ.id]) : 0;
+                totalPorcentagem += (nota * (ativ.peso / 10));
+            });
+
+            const tdMedia = document.getElementById(`media_${indexAluno}`);
+            const tdStatus = document.getElementById(`status_${indexAluno}`);
+            if(!tdMedia) return; 
+
+            tdMedia.innerText = totalPorcentagem.toFixed(1) + "%";
+            if (totalPorcentagem >= 60) tdStatus.innerHTML = '<span class="status-badge approved">Aprovado</span>';
+            else if (totalPorcentagem > 0) tdStatus.innerHTML = '<span class="status-badge reproved">Reprovado</span>';
+            else tdStatus.innerHTML = '<span style="color: #999;">Aguardando</span>';
+        }
+
+        // --- SISTEMA DO BOLETIM INDIVIDUAL COM FIX TELA BRANCA ---
+        window.abrirBoletim = (alunoId) => {
+            const turma = turmas[indiceTurmaAtiva];
+            const aluno = turma.alunos.find(a => a.id === alunoId);
+            if(!aluno) return;
+
+            alunoAtualBoletim = aluno.nome; 
+
+            let htmlBoletim = `
+                <div class="boletim-header">
+                    <h2 style="color: #0056b3; margin: 0; font-size: 26px;">Boletim de Desempenho - SESI</h2>
+                    <p style="margin: 8px 0; color: #333; font-size: 18px;"><strong>Aluno(a):</strong> ${aluno.nome}</p>
+                    <p style="margin: 5px 0; color: #555; font-size: 16px;"><strong>Turma:</strong> ${turma.nome}</p>
+                </div>
+                <table class="boletim-table">
+                    <thead>
+                        <tr>
+                            <th>Área do Conhecimento</th>
+                            <th style="text-align: center; width: 120px;">Média Final</th>
+                            <th style="text-align: center; width: 120px;">Situação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            LISTA_AREAS.forEach(areaNome => {
+                const areaDados = turma.areas[areaNome];
+                let totalPorcentagem = 0;
+                let temAtividades = areaDados.atividades.length > 0;
+
+                if (temAtividades) {
+                    areaDados.atividades.forEach(ativ => {
+                        let nota = areaDados.notas[aluno.id] && areaDados.notas[aluno.id][ativ.id] ? parseFloat(areaDados.notas[aluno.id][ativ.id]) : 0;
+                        totalPorcentagem += (nota * (ativ.peso / 10));
+                    });
+                }
+
+                let statusHTML = "-";
+                let mediaHTML = "-";
+
+                if (temAtividades) {
+                    mediaHTML = totalPorcentagem.toFixed(1) + "%";
+                    if (totalPorcentagem >= 60) statusHTML = '<span style="color: #155724; font-weight: bold;">Aprovado</span>';
+                    else if (totalPorcentagem > 0) statusHTML = '<span style="color: #721c24; font-weight: bold;">Reprovado</span>';
+                    else statusHTML = '<span style="color: #999;">Aguardando</span>';
+                } else {
+                    mediaHTML = '<span style="color: #aaa; font-style: italic;">S/N</span>';
+                    statusHTML = '<span style="color: #aaa; font-style: italic;">Sem avaliações</span>';
+                }
+
+                htmlBoletim += `
+                    <tr>
+                        <td><strong>${areaNome}</strong></td>
+                        <td style="text-align: center; font-size: 16px;">${mediaHTML}</td>
+                        <td style="text-align: center;">${statusHTML}</td>
+                    </tr>
+                `;
+            });
+
+            htmlBoletim += `</tbody></table>`;
+            
+            // Joga o HTML tanto no visual quanto no container secreto do PDF
+            document.getElementById('areaImpressaoBoletim').innerHTML = htmlBoletim;
+            document.getElementById('modalBoletim').classList.remove('hidden');
+        };
+
+        window.fecharBoletim = () => {
+            document.getElementById('modalBoletim').classList.add('hidden');
+        };
+
+        window.gerarPDFBoletim = () => {
+            const btnBaixar = document.getElementById('btnBaixarBoletim');
+            const textoOriginal = btnBaixar.innerText;
+            btnBaixar.innerText = "⏳ Gerando PDF...";
+
+            // O SEGREDO: Pega o HTML pronto do Modal e joga no Container Secreto (que não é flutuante)
+            const htmlPronto = document.getElementById('areaImpressaoBoletim').innerHTML;
+            const containerSecreto = document.getElementById('containerBoletimPDF');
+            containerSecreto.innerHTML = htmlPronto;
+
+            // Esconde o site temporariamente para o fundo ficar limpo
+            document.getElementById('conteudoPrincipal').classList.add('hidden');
+            document.getElementById('modalBoletim').classList.add('hidden');
+            containerSecreto.classList.remove('hidden');
+
+            const opcoesPDF = {
+                margin: 15,
+                filename: `Boletim_SESI_${alunoAtualBoletim.replace(/\s+/g, '_')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true }, 
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Tira a foto do Container Secreto
+            html2pdf().set(opcoesPDF).from(containerSecreto).save().then(() => {
+                // Traz o site de volta e limpa a área secreta
+                containerSecreto.classList.add('hidden');
+                document.getElementById('conteudoPrincipal').classList.remove('hidden');
+                document.getElementById('modalBoletim').classList.remove('hidden');
+                containerSecreto.innerHTML = '';
+                btnBaixar.innerText = textoOriginal;
+            });
+        };
+
+        // --- GERAR PDF DO DIÁRIO GERAL ---
+        window.gerarPDFDiario = () => {
+            const turma = turmas[indiceTurmaAtiva];
+            if (!turma || turma.alunos.length === 0) { alert("Não há dados para gerar o PDF."); return; }
+            document.body.classList.add('modo-impressao');
+            const elementoParaPDF = document.getElementById('areaTurma');
+            const opcoesPDF = {
+                margin: 10,
+                filename: `Diario_SESI_${turma.nome.replace(/\s+/g, '_')}_${areaAtiva.replace(/\s+/g, '_')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            };
+            html2pdf().set(opcoesPDF).from(elementoParaPDF).save().then(() => document.body.classList.remove('modo-impressao'));
+        };
+    </script>
+</body>
+</html>
