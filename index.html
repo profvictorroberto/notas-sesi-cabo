@@ -160,14 +160,15 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
+        // NOVAS CHAVES INSERIDAS AQUI
         const firebaseConfig = {
-            apiKey: "AIzaSyBMsQ9HQROY6Zfn82PGeEQlk6e6bk3DnjI",
-            authDomain: "sistemanotassesi.firebaseapp.com",
-            projectId: "sistemanotassesi",
-            storageBucket: "sistemanotassesi.firebasestorage.app",
-            messagingSenderId: "863158159626",
-            appId: "1:863158159626:web:eb6d856ab9ede8e73c92f3",
-            measurementId: "G-VWDBSNG5F1"
+            apiKey: "AIzaSyAROw7eYbAM7H6V0j83wXPkU5sM-X3FD0s",
+            authDomain: "notassmedio.firebaseapp.com",
+            databaseURL: "https://notassmedio-default-rtdb.firebaseio.com",
+            projectId: "notassmedio",
+            storageBucket: "notassmedio.firebasestorage.app",
+            messagingSenderId: "846891539181",
+            appId: "1:846891539181:web:4b96ff84b13b8045b28ae4"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -259,7 +260,7 @@
                     msgInicial.innerText = "Nenhuma turma salva encontrada. Crie uma turma acima para começar.";
                 }
             } catch (error) {
-                document.getElementById('mensagemInicial').innerText = "Erro ao conectar com o banco de dados.";
+                document.getElementById('mensagemInicial').innerText = "Erro ao conectar com o banco de dados. Verifique se o Firestore está ativado no projeto 'notassmedio'.";
             }
         }
 
@@ -493,7 +494,6 @@
             else tdStatus.innerHTML = '<span style="color: #999;">Aguardando</span>';
         }
 
-        // --- SISTEMA DO BOLETIM INDIVIDUAL COM FIX TELA BRANCA ---
         window.abrirBoletim = (alunoId) => {
             const turma = turmas[indiceTurmaAtiva];
             const aluno = turma.alunos.find(a => a.id === alunoId);
@@ -554,7 +554,6 @@
 
             htmlBoletim += `</tbody></table>`;
             
-            // Joga o HTML tanto no visual quanto no container secreto do PDF
             document.getElementById('areaImpressaoBoletim').innerHTML = htmlBoletim;
             document.getElementById('modalBoletim').classList.remove('hidden');
         };
@@ -568,12 +567,10 @@
             const textoOriginal = btnBaixar.innerText;
             btnBaixar.innerText = "⏳ Gerando PDF...";
 
-            // O SEGREDO: Pega o HTML pronto do Modal e joga no Container Secreto (que não é flutuante)
             const htmlPronto = document.getElementById('areaImpressaoBoletim').innerHTML;
             const containerSecreto = document.getElementById('containerBoletimPDF');
             containerSecreto.innerHTML = htmlPronto;
 
-            // Esconde o site temporariamente para o fundo ficar limpo
             document.getElementById('conteudoPrincipal').classList.add('hidden');
             document.getElementById('modalBoletim').classList.add('hidden');
             containerSecreto.classList.remove('hidden');
@@ -586,9 +583,7 @@
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
-            // Tira a foto do Container Secreto
             html2pdf().set(opcoesPDF).from(containerSecreto).save().then(() => {
-                // Traz o site de volta e limpa a área secreta
                 containerSecreto.classList.add('hidden');
                 document.getElementById('conteudoPrincipal').classList.remove('hidden');
                 document.getElementById('modalBoletim').classList.remove('hidden');
@@ -597,7 +592,6 @@
             });
         };
 
-        // --- GERAR PDF DO DIÁRIO GERAL ---
         window.gerarPDFDiario = () => {
             const turma = turmas[indiceTurmaAtiva];
             if (!turma || turma.alunos.length === 0) { alert("Não há dados para gerar o PDF."); return; }
