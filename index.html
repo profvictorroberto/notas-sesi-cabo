@@ -54,7 +54,12 @@
         .boletim-table th { background: #0056b3; color: white; text-align: center; }
         .boletim-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0056b3; padding-bottom: 10px; }
 
-        .esconder-no-pdf { } /* Classe base de manipulação */
+        .modo-impressao .esconder-no-pdf { display: none !important; }
+        .modo-impressao { padding: 0; background: white; }
+        .modo-impressao .container { box-shadow: none; max-width: none; padding: 0; }
+        .modo-impressao td input { border: none; background: transparent; font-weight: bold; font-size: 14px; padding: 0; width: 100%; }
+        .modo-impressao .section { border: none; padding: 0; margin-bottom: 10px; }
+        .modo-impressao .area-cabecalho { margin-bottom: 30px; }
 
         #statusNuvem { font-size: 14px; font-weight: bold; padding: 5px 10px; border-radius: 20px; margin-left: 15px; transition: 0.3s; }
         .status-salvo { color: #155724; background-color: #d4edda; }
@@ -128,7 +133,7 @@
             </div>
 
             <div class="esconder-no-pdf">
-                <button class="btn-pdf" id="btnBaixarDiario" onclick="gerarPDFDiario()">📄 Gerar PDF do Diário desta Disciplina</button>
+                <button class="btn-pdf" onclick="gerarPDFDiario()">📄 Gerar PDF do Diário desta Disciplina</button>
             </div>
         </div>
     </div>
@@ -141,7 +146,7 @@
         </div>
     </div>
 
-    <div id="containerPDFSecreto" style="display: none; position: absolute; top: 0; left: 0; background: white; padding: 20px; z-index: 9999; box-sizing: border-box;"></div>
+    <div id="containerBoletimPDF" class="hidden" style="background: white; padding: 40px; color: black; max-width: 800px; margin: 0 auto;"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
@@ -181,6 +186,7 @@
                 
                 try {
                     const idParaSalvar = turma.firebaseId || turma.nome;
+                    
                     let pacotesDeAtualizacao = {
                         "alunos": turma.alunos,
                         "dataUltimaAtualizacao": new Date().toLocaleString('pt-BR')
@@ -329,7 +335,7 @@
 
                 try {
                     const statusVisual = document.getElementById('statusNuvem');
-                    statusVisual.innerText = "⏳ Excluindo...";
+                    statusVisual.innerText = "⏳ Excluindo Disciplina...";
                     statusVisual.className = "status-salvando esconder-no-pdf";
 
                     const idParaSalvar = turma.firebaseId || turma.nome;
@@ -668,6 +674,7 @@
                 if (temAtividades) {
                     mediaHTML = totalPorcentagem.toFixed(1) + "%";
                 } else {
+                    // AQUI A MÁGICA: Em vez do S/N, fica vazio para ser preenchido à mão
                     mediaHTML = '&nbsp;'; 
                 }
 
@@ -695,104 +702,43 @@
             btnBaixar.innerText = "⏳ Gerando PDF...";
 
             const htmlPronto = document.getElementById('areaImpressaoBoletim').innerHTML;
-            const containerSecreto = document.getElementById('containerPDFSecreto');
+            const containerSecreto = document.getElementById('containerBoletimPDF');
             containerSecreto.innerHTML = htmlPronto;
-            
-            containerSecreto.style.width = '800px';
 
-            document.getElementById('conteudoPrincipal').style.display = 'none';
+            document.getElementById('conteudoPrincipal').classList.add('hidden');
             document.getElementById('modalBoletim').classList.add('hidden');
-            containerSecreto.style.display = 'block';
+            containerSecreto.classList.remove('hidden');
 
             const opcoesPDF = {
                 margin: 15,
                 filename: `Boletim_SESI_${alunoAtualBoletim.replace(/\s+/g, '_')}.pdf`,
-                image: { type: 'jpeg', quality: 1 },
-                html2canvas: { scale: 2, useCORS: true, scrollY: 0, scrollX: 0 }, 
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true }, 
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
             html2pdf().set(opcoesPDF).from(containerSecreto).save().then(() => {
-                containerSecreto.style.display = 'none';
-                document.getElementById('conteudoPrincipal').style.display = 'block';
+                containerSecreto.classList.add('hidden');
+                document.getElementById('conteudoPrincipal').classList.remove('hidden');
                 document.getElementById('modalBoletim').classList.remove('hidden');
                 containerSecreto.innerHTML = '';
                 btnBaixar.innerText = textoOriginal;
             });
         };
 
-        // --- SISTEMA DEFINITIVO PARA PDF DO DIÁRIO (Largo e sem quebras de página) ---
         window.gerarPDFDiario = () => {
             const turma = turmas[indiceTurmaAtiva];
             if (!turma || turma.alunos.length === 0) { alert("Não há dados para gerar o PDF."); return; }
-
-            const btnBaixar = document.getElementById('btnBaixarDiario');
-            const textoOriginal = btnBaixar.innerText;
-            btnBaixar.innerText = "⏳ Gerando PDF...";
-
-            const containerSecreto = document.getElementById('containerPDFSecreto');
-            containerSecreto.innerHTML = ''; 
-            
-            // Forçamos uma largura generosa para a tabela não ser espremida e cortada
-            containerSecreto.style.width = '1400px';
-
-            const style = document.createElement('style');
-            style.innerHTML = `
-                #tabelaClonePDF { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-family: sans-serif; }
-                #tabelaClonePDF th, #tabelaClonePDF td { border: 1px solid #444; padding: 6px; text-align: center; font-size: 12px; }
-                #tabelaClonePDF th { background-color: #e9ecef; color: #333; font-weight: bold; }
-                #tabelaClonePDF tr { page-break-inside: avoid !important; }
-                .cabecalho-pdf { text-align: center; margin-bottom: 20px; font-family: sans-serif; }
-                .cabecalho-pdf h2 { color: #0056b3; margin: 0; font-size: 24px; }
-                .cabecalho-pdf h3 { margin: 5px 0; color: #333; font-size: 16px; }
-            `;
-
-            const headerHtml = `
-                <div class="cabecalho-pdf">
-                    <h2>Diário de Classe - SESI</h2>
-                    <h3>Turma: ${turma.nome} | Disciplina: ${areaAtiva}</h3>
-                </div>
-            `;
-
-            const tabelaOriginal = document.getElementById('tabelaDiario');
-            const tabelaClone = tabelaOriginal.cloneNode(true);
-            tabelaClone.id = 'tabelaClonePDF';
-
-            // Troca inputs de notas por texto puro
-            const inputs = tabelaClone.querySelectorAll('input');
-            inputs.forEach(input => {
-                const td = input.parentElement;
-                td.innerText = input.value || '-'; 
-            });
-
-            // Remove a coluna inútil de lixeiras
-            const elementosEscondidos = tabelaClone.querySelectorAll('.esconder-no-pdf');
-            elementosEscondidos.forEach(el => el.remove());
-
-            containerSecreto.appendChild(style);
-            containerSecreto.insertAdjacentHTML('beforeend', headerHtml);
-            containerSecreto.appendChild(tabelaClone);
-
-            // Esconde o painel principal e mostra o contêiner invisível perfeitamente alinhado no topo (0,0)
-            document.getElementById('conteudoPrincipal').style.display = 'none';
-            containerSecreto.style.display = 'block';
-
+            document.body.classList.add('modo-impressao');
+            const elementoParaPDF = document.getElementById('areaTurma');
             const opcoesPDF = {
                 margin: 10,
                 filename: `Diario_SESI_${turma.nome.replace(/\s+/g, '_')}_${areaAtiva.replace(/\s+/g, '_')}.pdf`,
-                image: { type: 'jpeg', quality: 1 },
-                // O segredo: Trava a rolagem em 0 e deixa o html2canvas redimensionar toda a largura de 1400px pra folha A4
-                html2canvas: { scale: 2, useCORS: true, scrollY: 0, scrollX: 0 }, 
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-                pagebreak: { mode: 'css', avoid: 'tr' }
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
             };
-
-            html2pdf().set(opcoesPDF).from(containerSecreto).save().then(() => {
-                containerSecreto.style.display = 'none';
-                document.getElementById('conteudoPrincipal').style.display = 'block';
-                containerSecreto.innerHTML = '';
-                btnBaixar.innerText = textoOriginal;
-            });
+            html2pdf().set(opcoesPDF).from(elementoParaPDF).save().then(() => document.body.classList.remove('modo-impressao'));
         };
     </script>
 </body>
