@@ -98,15 +98,10 @@
 
             <div class="row esconder-no-pdf" style="background: #e9ecef; padding: 10px 15px; border-radius: 5px; margin-bottom: 20px;">
                 <label for="seletorArea" style="font-weight: bold; font-size: 16px; margin-right: 10px; color: #333;">Área da Disciplina:</label>
-                <select id="seletorArea" onchange="mudarArea()" style="font-weight: bold; font-size: 16px; color: #0056b3;">
-                    <option value="Ciências Humanas">Ciências Humanas</option>
-                    <option value="Ciências da Natureza">Ciências da Natureza</option>
-                    <option value="Matemática">Matemática</option>
-                    <option value="Linguagens">Linguagens</option>
-                    <option value="Robótica">Robótica</option>
-                    <option value="Aprofundamento">Aprofundamento</option>
-                    <option value="Projeto de Vida">Projeto de Vida</option>
-                </select>
+                <select id="seletorArea" onchange="mudarArea()" style="font-weight: bold; font-size: 16px; color: #0056b3; flex: 1;">
+                    </select>
+                <button class="btn-success" style="width: auto; margin: 0 5px; background-color: #17a2b8;" onclick="adicionarNovaArea()" title="Criar uma nova disciplina do zero">+ Nova Disciplina</button>
+                <button class="btn-danger" style="width: auto; margin: 0;" onclick="excluirAreaAtual()" title="Excluir a disciplina selecionada">🗑️</button>
             </div>
 
             <div class="section esconder-no-pdf">
@@ -116,7 +111,7 @@
                 <div class="row" style="margin-top: 15px; background: #fff; padding: 15px; border-radius: 5px; border: 1px dashed #ccc;">
                     <input type="text" id="novaAtivNome" placeholder="Nova Atividade (Ex: Prova Escrita)">
                     <input type="number" id="novaAtivPeso" placeholder="Peso %" style="flex: 0.3;">
-                    <button class="btn-add" onclick="adicionarAtividade()">+ Adicionar Atividade</button>
+                    <button class="btn-add" id="btnAdicionarAtiv" onclick="adicionarAtividade()">+ Adicionar Atividade</button>
                 </div>
                 <div style="text-align: right; font-weight: bold; margin-top: 10px; font-size: 18px;">
                     Total Distribuído: <span id="somaTotalPesos">0</span>%
@@ -155,7 +150,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        // Importamos o deleteField para poder deletar disciplinas completas cirurgicamente
+        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAROw7eYbAM7H6V0j83wXPkU5sM-X3FD0s",
@@ -172,14 +168,14 @@
 
         let turmas = []; 
         let indiceTurmaAtiva = -1;
-        let areaAtiva = "Ciências Humanas"; 
+        let areaAtiva = ""; 
         let timerAutoSaveEstrutura = null;
         let alunoAtualBoletim = "";
 
-        const LISTA_AREAS = ["Ciências Humanas", "Ciências da Natureza", "Matemática", "Linguagens", "Robótica", "Aprofundamento", "Projeto de Vida"];
+        // Disciplinas iniciais apenas para turmas NOVAS. Depois o professor apaga ou cria livremente.
+        const LISTA_AREAS_PADRAO = ["Ciências Humanas", "Ciências da Natureza", "Matemática", "Linguagens", "Robótica", "Aprofundamento", "Projeto de Vida"];
 
-        // 1. SALVAMENTO DA ESTRUTURA (Alunos e Atividades)
-        // Esse método só envia a estrutura, ignorando o bloco de notas para não sobrescrever o que outros professores digitaram
+        // --- 1. SALVAMENTO CIRÚRGICO DA ESTRUTURA (Blindado) ---
         function acionarAutoSaveEstrutura() {
             const statusVisual = document.getElementById('statusNuvem');
             statusVisual.innerText = "⏳ Salvando Dados...";
@@ -192,29 +188,23 @@
                 const turma = turmas[indiceTurmaAtiva];
                 
                 try {
-                    // Criamos um pacote apenas com a lista de alunos e os nomes das atividades (sem as notas)
-                    const dadosEstrutura = {
-                        turma: turma.nome,
-                        alunos: turma.alunos,
-                        areas: {},
-                        dataUltimaAtualizacao: new Date().toLocaleString('pt-BR')
+                    const idParaSalvar = turma.firebaseId || turma.nome;
+                    
+                    let pacotesDeAtualizacao = {
+                        "alunos": turma.alunos,
+                        "dataUltimaAtualizacao": new Date().toLocaleString('pt-BR')
                     };
 
-                    LISTA_AREAS.forEach(a => {
-                        dadosEstrutura.areas[a] = {
-                            atividades: turma.areas[a].atividades
-                        };
+                    Object.keys(turma.areas).forEach(a => {
+                        pacotesDeAtualizacao[`areas.${a}.atividades`] = turma.areas[a].atividades;
                     });
                     
-                    const idParaSalvar = turma.firebaseId || turma.nome;
-                    // { merge: true } garante que o Firebase atualize a estrutura, mas deixe as notas isoladas intactas
-                    await setDoc(doc(db, "diarios_turmas", idParaSalvar), dadosEstrutura, { merge: true });
-                    turma.firebaseId = idParaSalvar; 
+                    await updateDoc(doc(db, "diarios_turmas", idParaSalvar), pacotesDeAtualizacao);
                     
                     statusVisual.innerText = "☁️ Salvo";
                     statusVisual.className = "status-salvo esconder-no-pdf";
                 } catch (error) {
-                    statusVisual.innerText = "❌ Erro";
+                    statusVisual.innerText = "❌ Erro ao Salvar";
                     statusVisual.className = "status-salvando esconder-no-pdf";
                     console.error("Erro na Estrutura:", error);
                 }
@@ -231,7 +221,7 @@
                     let areasDoBanco = dados.areas;
                     if (!areasDoBanco) {
                         areasDoBanco = {};
-                        LISTA_AREAS.forEach(a => areasDoBanco[a] = { atividades: [], notas: {} });
+                        LISTA_AREAS_PADRAO.forEach(a => areasDoBanco[a] = { atividades: [], notas: {} });
                         
                         if (dados.atividadesDefinidas) {
                             areasDoBanco["Ciências Humanas"].atividades = dados.atividadesDefinidas;
@@ -243,10 +233,10 @@
                         }
                     }
 
-                    // Previne bugs caso alguma área esteja sem o objeto de notas criado no banco
-                    LISTA_AREAS.forEach(a => {
+                    Object.keys(areasDoBanco).forEach(a => {
                         if (!areasDoBanco[a]) areasDoBanco[a] = { atividades: [], notas: {} };
                         if (!areasDoBanco[a].notas) areasDoBanco[a].notas = {};
+                        if (!areasDoBanco[a].atividades) areasDoBanco[a].atividades = [];
                     });
 
                     let alunosTratados = (dados.alunos || []).map(al => {
@@ -278,6 +268,35 @@
 
         carregarDadosDoBanco();
 
+        // --- SISTEMA DE DISCIPLINAS DINÂMICAS ---
+        function renderizarSeletorAreas() {
+            const seletor = document.getElementById('seletorArea');
+            seletor.innerHTML = '';
+            const turma = turmas[indiceTurmaAtiva];
+            const areas = Object.keys(turma.areas);
+
+            if (areas.length === 0) {
+                seletor.innerHTML = '<option value="">(Nenhuma disciplina cadastrada)</option>';
+                areaAtiva = "";
+                document.getElementById('tituloAreaAtiva').innerText = " - Sem Disciplinas";
+                return;
+            }
+
+            if (!areas.includes(areaAtiva)) {
+                areaAtiva = areas[0];
+            }
+
+            areas.forEach(a => {
+                const option = document.createElement('option');
+                option.value = a;
+                option.innerText = a;
+                if (a === areaAtiva) option.selected = true;
+                seletor.appendChild(option);
+            });
+
+            document.getElementById('tituloAreaAtiva').innerText = " - " + areaAtiva;
+        }
+
         window.mudarArea = () => {
             areaAtiva = document.getElementById('seletorArea').value;
             document.getElementById('tituloAreaAtiva').innerText = " - " + areaAtiva;
@@ -285,7 +304,61 @@
             renderizarDiario();
         };
 
-        window.criarTurma = () => {
+        window.adicionarNovaArea = () => {
+            const nomeNovaArea = prompt("Digite o nome da nova Disciplina/Área (Ex: Aprofundamento de Matemática):");
+            if (!nomeNovaArea || nomeNovaArea.trim() === "") return;
+            
+            const nomeTrim = nomeNovaArea.trim();
+            const turma = turmas[indiceTurmaAtiva];
+
+            if (turma.areas[nomeTrim]) {
+                alert("Já existe uma disciplina com este nome nesta turma.");
+                return;
+            }
+
+            turma.areas[nomeTrim] = { atividades: [], notas: {} };
+            areaAtiva = nomeTrim;
+            
+            renderizarSeletorAreas();
+            renderizarAtividades();
+            renderizarDiario();
+            acionarAutoSaveEstrutura(); 
+        };
+
+        window.excluirAreaAtual = async () => {
+            if(!areaAtiva) return;
+            const turma = turmas[indiceTurmaAtiva];
+            const areaParaExcluir = areaAtiva;
+
+            if(confirm(`Tem certeza absoluta que deseja excluir a disciplina '${areaParaExcluir}'? Todas as notas e atividades dela serão perdidas!`)) {
+                
+                // Exclui localmente
+                delete turma.areas[areaParaExcluir];
+                renderizarSeletorAreas();
+                renderizarAtividades();
+                renderizarDiario();
+
+                // Exclui cirurgicamente no banco de dados usando o 'deleteField' do Firebase
+                try {
+                    const statusVisual = document.getElementById('statusNuvem');
+                    statusVisual.innerText = "⏳ Excluindo Disciplina...";
+                    statusVisual.className = "status-salvando esconder-no-pdf";
+
+                    const idParaSalvar = turma.firebaseId || turma.nome;
+                    await updateDoc(doc(db, "diarios_turmas", idParaSalvar), {
+                        [`areas.${areaParaExcluir}`]: deleteField(),
+                        "dataUltimaAtualizacao": new Date().toLocaleString('pt-BR')
+                    });
+
+                    statusVisual.innerText = "☁️ Salvo";
+                    statusVisual.className = "status-salvo esconder-no-pdf";
+                } catch(e) {
+                    console.error("Erro ao excluir disciplina:", e);
+                }
+            }
+        };
+
+        window.criarTurma = async () => {
             const nomeInput = document.getElementById('inputNovaTurma');
             const nome = nomeInput.value.trim();
 
@@ -294,7 +367,7 @@
             if (turmaExiste) { alert("Já existe uma turma com este nome."); return; }
 
             let objAreas = {};
-            LISTA_AREAS.forEach(a => objAreas[a] = { atividades: [], notas: {} });
+            LISTA_AREAS_PADRAO.forEach(a => objAreas[a] = { atividades: [], notas: {} });
 
             turmas.push({ 
                 id: Date.now().toString(), 
@@ -304,8 +377,23 @@
             });
             
             nomeInput.value = '';
-            selecionarTurma(turmas.length - 1);
-            acionarAutoSaveEstrutura(); 
+            const indexAtiva = turmas.length - 1;
+            selecionarTurma(indexAtiva);
+            
+            try {
+                document.getElementById('statusNuvem').innerText = "⏳ Criando...";
+                const docData = {
+                    turma: nome,
+                    alunos: [],
+                    areas: objAreas,
+                    dataUltimaAtualizacao: new Date().toLocaleString('pt-BR')
+                };
+                await setDoc(doc(db, "diarios_turmas", nome), docData);
+                turmas[indexAtiva].firebaseId = nome;
+                document.getElementById('statusNuvem').innerText = "☁️ Salvo";
+            } catch(e) {
+                console.error("Erro ao criar turma", e);
+            }
         };
 
         window.selecionarTurma = (index) => {
@@ -316,8 +404,7 @@
             
             document.getElementById('tituloTurmaAtiva').innerText = turmas[indiceTurmaAtiva].nome;
             
-            document.getElementById('seletorArea').value = areaAtiva;
-            document.getElementById('tituloAreaAtiva').innerText = " - " + areaAtiva;
+            renderizarSeletorAreas();
             
             document.getElementById('statusNuvem').innerText = "☁️ Salvo";
             document.getElementById('statusNuvem').className = "status-salvo esconder-no-pdf";
@@ -361,6 +448,7 @@
         }
 
         window.adicionarAtividade = () => {
+            if(!areaAtiva) { alert("Crie uma disciplina primeiro."); return; }
             const nome = document.getElementById('novaAtivNome').value;
             const peso = parseFloat(document.getElementById('novaAtivPeso').value);
             if (!nome || !peso || peso <= 0) { alert("Preencha o nome da atividade e um peso válido."); return; }
@@ -385,8 +473,16 @@
         };
 
         function renderizarAtividades() {
-            const area = turmas[indiceTurmaAtiva].areas[areaAtiva];
             const divLista = document.getElementById('listaAtividades');
+            if (!areaAtiva || !turmas[indiceTurmaAtiva].areas[areaAtiva]) {
+                divLista.innerHTML = `<p style="color:#666; font-size:14px;">Selecione ou crie uma disciplina.</p>`;
+                document.getElementById('somaTotalPesos').innerText = "0";
+                document.getElementById('btnAdicionarAtiv').disabled = true;
+                return;
+            }
+            document.getElementById('btnAdicionarAtiv').disabled = false;
+
+            const area = turmas[indiceTurmaAtiva].areas[areaAtiva];
             divLista.innerHTML = '';
             let soma = 0;
 
@@ -436,10 +532,17 @@
         };
 
         function renderizarDiario() {
+            const tbody = document.getElementById('corpoTabela');
+            const trCabecalho = document.getElementById('cabecalhoTabela');
+            
+            if (!areaAtiva || !turmas[indiceTurmaAtiva].areas[areaAtiva]) {
+                trCabecalho.innerHTML = '<th class="nome-aluno">Nome do Aluno</th><th>Info</th>';
+                tbody.innerHTML = `<tr><td colspan="2" style="padding:20px; color:#666;">Crie uma disciplina para gerenciar o diário.</td></tr>`;
+                return;
+            }
+
             const turma = turmas[indiceTurmaAtiva];
             const area = turma.areas[areaAtiva];
-            const trCabecalho = document.getElementById('cabecalhoTabela');
-            const tbody = document.getElementById('corpoTabela');
             
             trCabecalho.innerHTML = '<th class="nome-aluno">Nome do Aluno</th>';
             area.atividades.forEach(ativ => { trCabecalho.innerHTML += `<th>${ativ.nome}<br><small>(${ativ.peso}%)</small></th>`; });
@@ -473,8 +576,7 @@
             });
         }
 
-        // 2. SALVAMENTO CIRÚRGICO DE NOTAS
-        // Evita que os professores apaguem as notas uns dos outros
+        // --- 2. SALVAMENTO CIRÚRGICO DE NOTAS ---
         window.timersNotas = window.timersNotas || {};
 
         window.atualizarNota = (alunoId, idAtividade, elementoInput, indexAluno) => {
@@ -482,14 +584,15 @@
             const area = turma.areas[areaAtiva];
             const valor = elementoInput.value;
             
-            // Atualiza a memória local da sua tela
-            if(!area.notas[alunoId]) area.notas[alunoId] = {};
+            if(!area.notas[alunoId]) {
+                area.notas[alunoId] = {};
+            }
+            
             area.notas[alunoId][idAtividade] = valor;
             elementoInput.setAttribute('value', valor);
             
             recalcularLinhaAluno(indexAluno, alunoId);
             
-            // Ativa o salvamento específico DESSA nota
             const statusVisual = document.getElementById('statusNuvem');
             statusVisual.innerText = "⏳ Salvando Nota...";
             statusVisual.className = "status-salvando esconder-no-pdf";
@@ -500,22 +603,14 @@
             window.timersNotas[timerKey] = setTimeout(async () => {
                 try {
                     const idParaSalvar = turma.firebaseId || turma.nome;
+                    const caminhoDaNota = `areas.${areaAtiva}.notas.${alunoId}.${idAtividade}`;
                     
-                    // Pacote Cirúrgico: Só envia o caminho exato desta célula, o Firebase ignora o resto!
                     const pacoteCirurgico = {
-                        areas: {
-                            [areaAtiva]: {
-                                notas: {
-                                    [alunoId]: {
-                                        [idAtividade]: valor
-                                    }
-                                }
-                            }
-                        },
-                        dataUltimaAtualizacao: new Date().toLocaleString('pt-BR')
+                        [caminhoDaNota]: valor,
+                        "dataUltimaAtualizacao": new Date().toLocaleString('pt-BR')
                     };
 
-                    await setDoc(doc(db, "diarios_turmas", idParaSalvar), pacoteCirurgico, { merge: true });
+                    await updateDoc(doc(db, "diarios_turmas", idParaSalvar), pacoteCirurgico);
 
                     statusVisual.innerText = "☁️ Salvo";
                     statusVisual.className = "status-salvo esconder-no-pdf";
@@ -546,6 +641,7 @@
             else tdStatus.innerHTML = '<span style="color: #999;">Aguardando</span>';
         }
 
+        // --- SISTEMA DO BOLETIM (SEM A COLUNA SITUAÇÃO) ---
         window.abrirBoletim = (alunoId) => {
             const turma = turmas[indiceTurmaAtiva];
             const aluno = turma.alunos.find(a => a.id === alunoId);
@@ -562,15 +658,15 @@
                 <table class="boletim-table">
                     <thead>
                         <tr>
-                            <th>Área do Conhecimento</th>
-                            <th style="text-align: center; width: 120px;">Média Final</th>
-                            <th style="text-align: center; width: 120px;">Situação</th>
+                            <th>Área da Disciplina</th>
+                            <th style="text-align: center; width: 150px;">Média Final</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
-            LISTA_AREAS.forEach(areaNome => {
+            // Percorre apenas as disciplinas que foram criadas na turma atual
+            Object.keys(turma.areas).forEach(areaNome => {
                 const areaDados = turma.areas[areaNome];
                 let totalPorcentagem = 0;
                 let temAtividades = areaDados.atividades.length > 0;
@@ -582,24 +678,18 @@
                     });
                 }
 
-                let statusHTML = "-";
                 let mediaHTML = "-";
 
                 if (temAtividades) {
                     mediaHTML = totalPorcentagem.toFixed(1) + "%";
-                    if (totalPorcentagem >= 60) statusHTML = '<span style="color: #155724; font-weight: bold;">Aprovado</span>';
-                    else if (totalPorcentagem > 0) statusHTML = '<span style="color: #721c24; font-weight: bold;">Reprovado</span>';
-                    else statusHTML = '<span style="color: #999;">Aguardando</span>';
                 } else {
                     mediaHTML = '<span style="color: #aaa; font-style: italic;">S/N</span>';
-                    statusHTML = '<span style="color: #aaa; font-style: italic;">Sem avaliações</span>';
                 }
 
                 htmlBoletim += `
                     <tr>
                         <td><strong>${areaNome}</strong></td>
                         <td style="text-align: center; font-size: 16px;">${mediaHTML}</td>
-                        <td style="text-align: center;">${statusHTML}</td>
                     </tr>
                 `;
             });
