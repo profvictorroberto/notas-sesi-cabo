@@ -133,7 +133,7 @@
             </div>
 
             <div class="esconder-no-pdf">
-                <button class="btn-pdf" onclick="gerarPDFDiario()">📄 Gerar PDF do Diário desta Disciplina</button>
+                <button class="btn-pdf" id="btnBaixarDiario" onclick="gerarPDFDiario()">📄 Gerar PDF do Diário desta Disciplina</button>
             </div>
         </div>
     </div>
@@ -146,7 +146,7 @@
         </div>
     </div>
 
-    <div id="containerBoletimPDF" class="hidden" style="background: white; padding: 40px; color: black; max-width: 800px; margin: 0 auto;"></div>
+    <div id="containerPDFSecreto" class="hidden" style="background: white; padding: 40px; color: black; margin: 0 auto; width: 1100px;"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
@@ -186,7 +186,6 @@
                 
                 try {
                     const idParaSalvar = turma.firebaseId || turma.nome;
-                    
                     let pacotesDeAtualizacao = {
                         "alunos": turma.alunos,
                         "dataUltimaAtualizacao": new Date().toLocaleString('pt-BR')
@@ -674,7 +673,6 @@
                 if (temAtividades) {
                     mediaHTML = totalPorcentagem.toFixed(1) + "%";
                 } else {
-                    // AQUI A MÁGICA: Em vez do S/N, fica vazio para ser preenchido à mão
                     mediaHTML = '&nbsp;'; 
                 }
 
@@ -702,7 +700,7 @@
             btnBaixar.innerText = "⏳ Gerando PDF...";
 
             const htmlPronto = document.getElementById('areaImpressaoBoletim').innerHTML;
-            const containerSecreto = document.getElementById('containerBoletimPDF');
+            const containerSecreto = document.getElementById('containerPDFSecreto');
             containerSecreto.innerHTML = htmlPronto;
 
             document.getElementById('conteudoPrincipal').classList.add('hidden');
@@ -726,19 +724,79 @@
             });
         };
 
+        // --- SISTEMA CORRIGIDO DE GERAÇÃO DO PDF DO DIÁRIO ---
         window.gerarPDFDiario = () => {
             const turma = turmas[indiceTurmaAtiva];
             if (!turma || turma.alunos.length === 0) { alert("Não há dados para gerar o PDF."); return; }
-            document.body.classList.add('modo-impressao');
-            const elementoParaPDF = document.getElementById('areaTurma');
+
+            const btnBaixar = document.getElementById('btnBaixarDiario');
+            const textoOriginal = btnBaixar.innerText;
+            btnBaixar.innerText = "⏳ Gerando PDF...";
+
+            // 1. Usa o nosso Container Secreto (sem barra de rolagem e sem quebras de layout)
+            const containerSecreto = document.getElementById('containerPDFSecreto');
+            containerSecreto.innerHTML = ''; 
+
+            // 2. Monta um cabeçalho limpo exclusivo para o PDF
+            const headerHtml = `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h2 style="color: #0056b3; margin: 0; font-size: 26px;">Diário de Classe - SESI</h2>
+                    <h3 style="margin: 5px 0; color: #333; font-size: 18px;">Turma: ${turma.nome} | Disciplina: ${areaAtiva}</h3>
+                </div>
+            `;
+
+            // 3. Clona a tabela de notas exata que está na tela
+            const tabelaOriginal = document.getElementById('tabelaDiario');
+            const tabelaClone = tabelaOriginal.cloneNode(true);
+
+            // 4. MÁGICA: Converte todos os <inputs> de notas em texto simples. Evita os bugs do PDF.
+            const inputs = tabelaClone.querySelectorAll('input');
+            inputs.forEach(input => {
+                const td = input.parentElement;
+                td.innerText = input.value || '-'; 
+            });
+
+            // 5. Remove a lixeira e o botão de boletim da tabela do PDF
+            const elementosEscondidos = tabelaClone.querySelectorAll('.esconder-no-pdf');
+            elementosEscondidos.forEach(el => el.remove());
+
+            // 6. Formata a tabela para ficar bonita na impressão
+            tabelaClone.style.width = '100%';
+            tabelaClone.style.borderCollapse = 'collapse';
+            tabelaClone.querySelectorAll('th, td').forEach(celula => {
+                celula.style.border = '1px solid #ddd';
+                celula.style.padding = '8px';
+                celula.style.fontSize = '14px';
+            });
+            tabelaClone.querySelectorAll('th').forEach(th => {
+                th.style.backgroundColor = '#e9ecef';
+                th.style.color = '#333';
+            });
+
+            // Junta tudo no container secreto
+            containerSecreto.innerHTML = headerHtml;
+            containerSecreto.appendChild(tabelaClone);
+
+            // Esconde a tela principal para o PDF focar só na tabela limpa
+            document.getElementById('conteudoPrincipal').classList.add('hidden');
+            containerSecreto.classList.remove('hidden');
+
             const opcoesPDF = {
                 margin: 10,
                 filename: `Diario_SESI_${turma.nome.replace(/\s+/g, '_')}_${areaAtiva.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2 },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: 'avoid-all', avoid: 'tr' } // Evita cortar um aluno no meio da página
             };
-            html2pdf().set(opcoesPDF).from(elementoParaPDF).save().then(() => document.body.classList.remove('modo-impressao'));
+
+            html2pdf().set(opcoesPDF).from(containerSecreto).save().then(() => {
+                // Traz a tela de volta e limpa o container secreto
+                containerSecreto.classList.add('hidden');
+                document.getElementById('conteudoPrincipal').classList.remove('hidden');
+                containerSecreto.innerHTML = '';
+                btnBaixar.innerText = textoOriginal;
+            });
         };
     </script>
 </body>
