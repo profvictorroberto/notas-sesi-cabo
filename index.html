@@ -54,13 +54,6 @@
         .boletim-table th { background: #0056b3; color: white; text-align: center; }
         .boletim-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0056b3; padding-bottom: 10px; }
 
-        .modo-impressao .esconder-no-pdf { display: none !important; }
-        .modo-impressao { padding: 0; background: white; }
-        .modo-impressao .container { box-shadow: none; max-width: none; padding: 0; }
-        .modo-impressao td input { border: none; background: transparent; font-weight: bold; font-size: 14px; padding: 0; width: 100%; }
-        .modo-impressao .section { border: none; padding: 0; margin-bottom: 10px; }
-        .modo-impressao .area-cabecalho { margin-bottom: 30px; }
-
         #statusNuvem { font-size: 14px; font-weight: bold; padding: 5px 10px; border-radius: 20px; margin-left: 15px; transition: 0.3s; }
         .status-salvo { color: #155724; background-color: #d4edda; }
         .status-salvando { color: #856404; background-color: #fff3cd; }
@@ -146,7 +139,7 @@
         </div>
     </div>
 
-    <div id="containerPDFSecreto" class="hidden" style="background: white; padding: 40px; color: black; margin: 0 auto; width: 1100px;"></div>
+    <div id="containerPDFSecreto" class="hidden" style="background: white; padding: 20px; color: black; max-width: 1122px; margin: 0 auto; box-sizing: border-box;"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
@@ -724,7 +717,7 @@
             });
         };
 
-        // --- SISTEMA CORRIGIDO DE GERAÇÃO DO PDF DO DIÁRIO ---
+        // --- SISTEMA CORRIGIDO E DEFINITIVO PARA O DIÁRIO COMPLETO EM PDF ---
         window.gerarPDFDiario = () => {
             const turma = turmas[indiceTurmaAtiva];
             if (!turma || turma.alunos.length === 0) { alert("Não há dados para gerar o PDF."); return; }
@@ -733,51 +726,55 @@
             const textoOriginal = btnBaixar.innerText;
             btnBaixar.innerText = "⏳ Gerando PDF...";
 
-            // 1. Usa o nosso Container Secreto (sem barra de rolagem e sem quebras de layout)
             const containerSecreto = document.getElementById('containerPDFSecreto');
             containerSecreto.innerHTML = ''; 
 
-            // 2. Monta um cabeçalho limpo exclusivo para o PDF
+            // Estilos injetados exclusivamente para a tabela do PDF (Impede páginas em branco e cortes)
+            const style = document.createElement('style');
+            style.innerHTML = `
+                #tabelaClonePDF { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 20px; }
+                #tabelaClonePDF th, #tabelaClonePDF td { border: 1px solid #555; padding: 8px; text-align: center; font-size: 12px; word-wrap: break-word; }
+                #tabelaClonePDF th { background-color: #e9ecef; color: #333; font-weight: bold; }
+                #tabelaClonePDF tr { page-break-inside: avoid !important; }
+                .cabecalho-pdf { text-align: center; margin-bottom: 20px; }
+                .cabecalho-pdf h2 { color: #0056b3; margin: 0; font-size: 24px; }
+                .cabecalho-pdf h3 { margin: 5px 0; color: #333; font-size: 16px; }
+            `;
+
             const headerHtml = `
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <h2 style="color: #0056b3; margin: 0; font-size: 26px;">Diário de Classe - SESI</h2>
-                    <h3 style="margin: 5px 0; color: #333; font-size: 18px;">Turma: ${turma.nome} | Disciplina: ${areaAtiva}</h3>
+                <div class="cabecalho-pdf">
+                    <h2>Diário de Classe - SESI</h2>
+                    <h3>Turma: ${turma.nome} | Disciplina: ${areaAtiva}</h3>
                 </div>
             `;
 
-            // 3. Clona a tabela de notas exata que está na tela
+            // Clona a tabela da tela
             const tabelaOriginal = document.getElementById('tabelaDiario');
             const tabelaClone = tabelaOriginal.cloneNode(true);
+            tabelaClone.id = 'tabelaClonePDF';
 
-            // 4. MÁGICA: Converte todos os <inputs> de notas em texto simples. Evita os bugs do PDF.
+            // MÁGICA: Converte todos os inputs de notas em texto simples. Evita os bugs visuais do PDF.
             const inputs = tabelaClone.querySelectorAll('input');
             inputs.forEach(input => {
                 const td = input.parentElement;
                 td.innerText = input.value || '-'; 
             });
 
-            // 5. Remove a lixeira e o botão de boletim da tabela do PDF
+            // Remove a coluna de Lixeira/Boletim que não serve pro papel
             const elementosEscondidos = tabelaClone.querySelectorAll('.esconder-no-pdf');
             elementosEscondidos.forEach(el => el.remove());
 
-            // 6. Formata a tabela para ficar bonita na impressão
-            tabelaClone.style.width = '100%';
-            tabelaClone.style.borderCollapse = 'collapse';
-            tabelaClone.querySelectorAll('th, td').forEach(celula => {
-                celula.style.border = '1px solid #ddd';
-                celula.style.padding = '8px';
-                celula.style.fontSize = '14px';
-            });
-            tabelaClone.querySelectorAll('th').forEach(th => {
-                th.style.backgroundColor = '#e9ecef';
-                th.style.color = '#333';
-            });
+            // Força a coluna "Nome do Aluno" a ser mais larga para não esmagar os nomes
+            const ths = tabelaClone.querySelectorAll('th');
+            if(ths.length > 0) {
+                ths[0].style.width = '30%'; 
+            }
 
-            // Junta tudo no container secreto
-            containerSecreto.innerHTML = headerHtml;
+            containerSecreto.appendChild(style);
+            containerSecreto.insertAdjacentHTML('beforeend', headerHtml);
             containerSecreto.appendChild(tabelaClone);
 
-            // Esconde a tela principal para o PDF focar só na tabela limpa
+            // Esconde a tela principal para focar só na área secreta do PDF
             document.getElementById('conteudoPrincipal').classList.add('hidden');
             containerSecreto.classList.remove('hidden');
 
@@ -785,13 +782,14 @@
                 margin: 10,
                 filename: `Diario_SESI_${turma.nome.replace(/\s+/g, '_')}_${areaAtiva.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2 },
+                // windowWidth força o canvas a renderizar a tabela inteira como se estivesse numa tela Full HD (sem espremer)
+                html2canvas: { scale: 2, useCORS: true, windowWidth: 1122 }, 
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-                pagebreak: { mode: 'avoid-all', avoid: 'tr' } // Evita cortar um aluno no meio da página
+                // A regra de quebra de página que respeita as linhas da tabela
+                pagebreak: { mode: ['css', 'legacy'] } 
             };
 
             html2pdf().set(opcoesPDF).from(containerSecreto).save().then(() => {
-                // Traz a tela de volta e limpa o container secreto
                 containerSecreto.classList.add('hidden');
                 document.getElementById('conteudoPrincipal').classList.remove('hidden');
                 containerSecreto.innerHTML = '';
