@@ -99,7 +99,7 @@
             <div class="row esconder-no-pdf" style="background: #e9ecef; padding: 10px 15px; border-radius: 5px; margin-bottom: 20px;">
                 <label for="seletorArea" style="font-weight: bold; font-size: 16px; margin-right: 10px; color: #333;">Área da Disciplina:</label>
                 <select id="seletorArea" onchange="mudarArea()" style="font-weight: bold; font-size: 16px; color: #0056b3; flex: 1;">
-                    </select>
+                </select>
                 <button class="btn-success" style="width: auto; margin: 0 5px; background-color: #17a2b8;" onclick="adicionarNovaArea()" title="Criar uma nova disciplina do zero">+ Nova Disciplina</button>
                 <button class="btn-danger" style="width: auto; margin: 0;" onclick="excluirAreaAtual()" title="Excluir a disciplina selecionada">🗑️</button>
             </div>
@@ -150,7 +150,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        // Importamos o deleteField para poder deletar disciplinas completas cirurgicamente
         import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -172,10 +171,8 @@
         let timerAutoSaveEstrutura = null;
         let alunoAtualBoletim = "";
 
-        // Disciplinas iniciais apenas para turmas NOVAS. Depois o professor apaga ou cria livremente.
         const LISTA_AREAS_PADRAO = ["Ciências Humanas", "Ciências da Natureza", "Matemática", "Linguagens", "Robótica", "Aprofundamento", "Projeto de Vida"];
 
-        // --- 1. SALVAMENTO CIRÚRGICO DA ESTRUTURA (Blindado) ---
         function acionarAutoSaveEstrutura() {
             const statusVisual = document.getElementById('statusNuvem');
             statusVisual.innerText = "⏳ Salvando Dados...";
@@ -268,7 +265,6 @@
 
         carregarDadosDoBanco();
 
-        // --- SISTEMA DE DISCIPLINAS DINÂMICAS ---
         function renderizarSeletorAreas() {
             const seletor = document.getElementById('seletorArea');
             seletor.innerHTML = '';
@@ -332,13 +328,11 @@
 
             if(confirm(`Tem certeza absoluta que deseja excluir a disciplina '${areaParaExcluir}'? Todas as notas e atividades dela serão perdidas!`)) {
                 
-                // Exclui localmente
                 delete turma.areas[areaParaExcluir];
                 renderizarSeletorAreas();
                 renderizarAtividades();
                 renderizarDiario();
 
-                // Exclui cirurgicamente no banco de dados usando o 'deleteField' do Firebase
                 try {
                     const statusVisual = document.getElementById('statusNuvem');
                     statusVisual.innerText = "⏳ Excluindo Disciplina...";
@@ -576,7 +570,6 @@
             });
         }
 
-        // --- 2. SALVAMENTO CIRÚRGICO DE NOTAS ---
         window.timersNotas = window.timersNotas || {};
 
         window.atualizarNota = (alunoId, idAtividade, elementoInput, indexAluno) => {
@@ -641,7 +634,6 @@
             else tdStatus.innerHTML = '<span style="color: #999;">Aguardando</span>';
         }
 
-        // --- SISTEMA DO BOLETIM (SEM A COLUNA SITUAÇÃO) ---
         window.abrirBoletim = (alunoId) => {
             const turma = turmas[indiceTurmaAtiva];
             const aluno = turma.alunos.find(a => a.id === alunoId);
@@ -665,7 +657,6 @@
                     <tbody>
             `;
 
-            // Percorre apenas as disciplinas que foram criadas na turma atual
             Object.keys(turma.areas).forEach(areaNome => {
                 const areaDados = turma.areas[areaNome];
                 let totalPorcentagem = 0;
@@ -678,12 +669,13 @@
                     });
                 }
 
-                let mediaHTML = "-";
+                let mediaHTML = "";
 
                 if (temAtividades) {
                     mediaHTML = totalPorcentagem.toFixed(1) + "%";
                 } else {
-                    mediaHTML = '<span style="color: #aaa; font-style: italic;">S/N</span>';
+                    // AQUI A MÁGICA: Em vez do S/N, fica vazio para ser preenchido à mão
+                    mediaHTML = '&nbsp;'; 
                 }
 
                 htmlBoletim += `
