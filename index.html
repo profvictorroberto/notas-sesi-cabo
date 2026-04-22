@@ -44,13 +44,11 @@
         .btn-icon { background-color: transparent; border: none; cursor: pointer; font-size: 18px; padding: 0; color: #dc3545; }
         .btn-icon:hover { color: #a71d2a; background-color: transparent; }
 
-        /* Estilos do Boletim Modal */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background: #fff; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .close-btn { position: absolute; top: 15px; right: 15px; background: #dc3545; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-weight: bold; padding: 0; display: flex; justify-content: center; align-items: center; transition: 0.3s;}
         .close-btn:hover { background: #c82333; }
         
-        /* Estilos globais para a tabela do boletim (usado no modal e no PDF) */
         .boletim-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         .boletim-table th, .boletim-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         .boletim-table th { background: #0056b3; color: white; text-align: center; }
@@ -148,8 +146,7 @@
     <div id="modalBoletim" class="modal-overlay hidden">
         <div class="modal-content">
             <button class="close-btn" title="Fechar" onclick="fecharBoletim()">X</button>
-            <div id="areaImpressaoBoletim">
-                </div>
+            <div id="areaImpressaoBoletim"></div>
             <button class="btn-pdf" id="btnBaixarBoletim" onclick="gerarPDFBoletim()" style="margin-top: 20px; background-color: #28a745;">📄 Baixar Boletim em PDF</button>
         </div>
     </div>
@@ -160,7 +157,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-        // NOVAS CHAVES INSERIDAS AQUI
         const firebaseConfig = {
             apiKey: "AIzaSyAROw7eYbAM7H6V0j83wXPkU5sM-X3FD0s",
             authDomain: "notassmedio.firebaseapp.com",
@@ -177,40 +173,50 @@
         let turmas = []; 
         let indiceTurmaAtiva = -1;
         let areaAtiva = "Ciências Humanas"; 
-        let timerAutoSave = null;
+        let timerAutoSaveEstrutura = null;
         let alunoAtualBoletim = "";
 
         const LISTA_AREAS = ["Ciências Humanas", "Ciências da Natureza", "Matemática", "Linguagens", "Robótica", "Aprofundamento", "Projeto de Vida"];
 
-        function acionarAutoSave() {
+        // 1. SALVAMENTO DA ESTRUTURA (Alunos e Atividades)
+        // Esse método só envia a estrutura, ignorando o bloco de notas para não sobrescrever o que outros professores digitaram
+        function acionarAutoSaveEstrutura() {
             const statusVisual = document.getElementById('statusNuvem');
-            statusVisual.innerText = "⏳ Salvando...";
+            statusVisual.innerText = "⏳ Salvando Dados...";
             statusVisual.className = "status-salvando esconder-no-pdf";
 
-            clearTimeout(timerAutoSave);
+            clearTimeout(timerAutoSaveEstrutura);
             
-            timerAutoSave = setTimeout(async () => {
+            timerAutoSaveEstrutura = setTimeout(async () => {
                 if(indiceTurmaAtiva === -1) return;
                 const turma = turmas[indiceTurmaAtiva];
                 
                 try {
-                    const dadosTurma = {
+                    // Criamos um pacote apenas com a lista de alunos e os nomes das atividades (sem as notas)
+                    const dadosEstrutura = {
                         turma: turma.nome,
                         alunos: turma.alunos,
-                        areas: turma.areas,
+                        areas: {},
                         dataUltimaAtualizacao: new Date().toLocaleString('pt-BR')
                     };
+
+                    LISTA_AREAS.forEach(a => {
+                        dadosEstrutura.areas[a] = {
+                            atividades: turma.areas[a].atividades
+                        };
+                    });
                     
                     const idParaSalvar = turma.firebaseId || turma.nome;
-                    await setDoc(doc(db, "diarios_turmas", idParaSalvar), dadosTurma);
+                    // { merge: true } garante que o Firebase atualize a estrutura, mas deixe as notas isoladas intactas
+                    await setDoc(doc(db, "diarios_turmas", idParaSalvar), dadosEstrutura, { merge: true });
                     turma.firebaseId = idParaSalvar; 
                     
                     statusVisual.innerText = "☁️ Salvo";
                     statusVisual.className = "status-salvo esconder-no-pdf";
                 } catch (error) {
-                    statusVisual.innerText = "❌ Erro ao Salvar";
+                    statusVisual.innerText = "❌ Erro";
                     statusVisual.className = "status-salvando esconder-no-pdf";
-                    console.error("Erro no Auto-Save:", error);
+                    console.error("Erro na Estrutura:", error);
                 }
             }, 1000);
         }
@@ -237,6 +243,12 @@
                         }
                     }
 
+                    // Previne bugs caso alguma área esteja sem o objeto de notas criado no banco
+                    LISTA_AREAS.forEach(a => {
+                        if (!areasDoBanco[a]) areasDoBanco[a] = { atividades: [], notas: {} };
+                        if (!areasDoBanco[a].notas) areasDoBanco[a].notas = {};
+                    });
+
                     let alunosTratados = (dados.alunos || []).map(al => {
                         return { id: al.id ? al.id.toString() : Date.now().toString() + Math.random().toString().substr(2,5), nome: al.nome };
                     });
@@ -260,7 +272,7 @@
                     msgInicial.innerText = "Nenhuma turma salva encontrada. Crie uma turma acima para começar.";
                 }
             } catch (error) {
-                document.getElementById('mensagemInicial').innerText = "Erro ao conectar com o banco de dados. Verifique se o Firestore está ativado no projeto 'notassmedio'.";
+                document.getElementById('mensagemInicial').innerText = "Erro ao conectar com o banco de dados.";
             }
         }
 
@@ -293,7 +305,7 @@
             
             nomeInput.value = '';
             selecionarTurma(turmas.length - 1);
-            acionarAutoSave(); 
+            acionarAutoSaveEstrutura(); 
         };
 
         window.selecionarTurma = (index) => {
@@ -361,7 +373,7 @@
             
             renderizarAtividades();
             renderizarDiario();
-            acionarAutoSave(); 
+            acionarAutoSaveEstrutura(); 
         };
 
         window.removerAtividade = (idAtiv) => {
@@ -369,7 +381,7 @@
             area.atividades = area.atividades.filter(a => a.id !== idAtiv);
             renderizarAtividades();
             renderizarDiario();
-            acionarAutoSave(); 
+            acionarAutoSaveEstrutura(); 
         };
 
         function renderizarAtividades() {
@@ -404,7 +416,7 @@
             
             document.getElementById('novoAlunoNome').value = '';
             renderizarDiario();
-            acionarAutoSave(); 
+            acionarAutoSaveEstrutura(); 
         };
 
         window.excluirAluno = (indexAluno) => {
@@ -419,7 +431,7 @@
                 });
                 
                 renderizarDiario();
-                acionarAutoSave(); 
+                acionarAutoSaveEstrutura(); 
             }
         };
 
@@ -461,18 +473,58 @@
             });
         }
 
+        // 2. SALVAMENTO CIRÚRGICO DE NOTAS
+        // Evita que os professores apaguem as notas uns dos outros
+        window.timersNotas = window.timersNotas || {};
+
         window.atualizarNota = (alunoId, idAtividade, elementoInput, indexAluno) => {
-            const area = turmas[indiceTurmaAtiva].areas[areaAtiva];
+            const turma = turmas[indiceTurmaAtiva];
+            const area = turma.areas[areaAtiva];
+            const valor = elementoInput.value;
             
-            if(!area.notas[alunoId]) {
-                area.notas[alunoId] = {};
-            }
-            
-            area.notas[alunoId][idAtividade] = elementoInput.value;
-            elementoInput.setAttribute('value', elementoInput.value);
+            // Atualiza a memória local da sua tela
+            if(!area.notas[alunoId]) area.notas[alunoId] = {};
+            area.notas[alunoId][idAtividade] = valor;
+            elementoInput.setAttribute('value', valor);
             
             recalcularLinhaAluno(indexAluno, alunoId);
-            acionarAutoSave(); 
+            
+            // Ativa o salvamento específico DESSA nota
+            const statusVisual = document.getElementById('statusNuvem');
+            statusVisual.innerText = "⏳ Salvando Nota...";
+            statusVisual.className = "status-salvando esconder-no-pdf";
+
+            const timerKey = `nota_${alunoId}_${idAtividade}`;
+            clearTimeout(window.timersNotas[timerKey]);
+
+            window.timersNotas[timerKey] = setTimeout(async () => {
+                try {
+                    const idParaSalvar = turma.firebaseId || turma.nome;
+                    
+                    // Pacote Cirúrgico: Só envia o caminho exato desta célula, o Firebase ignora o resto!
+                    const pacoteCirurgico = {
+                        areas: {
+                            [areaAtiva]: {
+                                notas: {
+                                    [alunoId]: {
+                                        [idAtividade]: valor
+                                    }
+                                }
+                            }
+                        },
+                        dataUltimaAtualizacao: new Date().toLocaleString('pt-BR')
+                    };
+
+                    await setDoc(doc(db, "diarios_turmas", idParaSalvar), pacoteCirurgico, { merge: true });
+
+                    statusVisual.innerText = "☁️ Salvo";
+                    statusVisual.className = "status-salvo esconder-no-pdf";
+                } catch(e) {
+                    console.error("Erro ao salvar nota isolada:", e);
+                    statusVisual.innerText = "❌ Erro";
+                    statusVisual.className = "status-salvando esconder-no-pdf";
+                }
+            }, 800);
         };
 
         function recalcularLinhaAluno(indexAluno, alunoId) {
